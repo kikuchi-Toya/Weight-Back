@@ -1,93 +1,58 @@
-/* style.css (v7) */
+/* weightback.css */
 body {
     font-family: 'Inter', 'Noto Sans JP', sans-serif;
 }
 
-/* 必須マーク */
-.required::after {
-    content: "*";
-    color: #ef4444; /* red-500 */
-    margin-left: 4px;
+/* 入力テーブルのinput */
+#sampleInputTableBody input[type="number"] {
+    max-width: 100px; /* 幅調整 */
+    text-align: right;
+    padding: 0.25rem 0.5rem; /* 少し小さく */
+    border: 1px solid #d1d5db; /* gray-300 */
+    border-radius: 0.375rem; /* rounded-md */
 }
-
-/* モーダル表示時の背景固定 */
-body.modal-open {
-    overflow: hidden;
-}
-
-/* 個別の入力エラーメッセージ */
-.error-message {
-    display: none; /* Initially hidden, shown by JS */
-    color: #dc2626; /* red-600 */
-    font-size: 0.875rem; /* text-sm */
-    margin-top: 0.25rem; /* mt-1 */
-    min-height: 1.25rem;
+#sampleInputTableBody input[type="number"]:focus {
+    outline: none;
+    border-color: #3b82f6; /* blue-500 */
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); /* ring-blue-300相当 */
 }
 
 /* エラー時の入力フィールドスタイル */
-input.input-error,
-select.input-error {
+#sampleInputTableBody input.input-error {
     border-color: #dc2626; /* red-600 */
 }
-input.input-error:focus,
-select.input-error:focus {
+#sampleInputTableBody input.input-error:focus {
      border-color: #dc2626;
-     /* focus:ring-red-300 を Tailwind で指定 */
+     box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.5); /* ring-red-500/50 */
 }
 
-/* テーブルのセルスタイル */
-#modalContent table th,
-#modalContent table td {
-    padding: 0.5rem 0.5rem; /* 少し狭く */
-    border: 1px solid #e5e7eb; /* border-gray-200 */
+
+/* 結果テーブル */
+#resultsArea table th,
+#resultsArea table td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e5e7eb;
     text-align: center;
-    vertical-align: middle;
 }
-#modalContent table th {
-    background-color: #f9fafb; /* bg-gray-50 */
-    font-weight: 600; /* font-semibold */
-    white-space: nowrap; /* ヘッダーが折り返さないように */
-}
-#modalContent table tr.total-row td {
-    background-color: #f3f4f6; /* bg-gray-100 */
+#resultsArea table th {
+    background-color: #f9fafb;
     font-weight: 600;
 }
-
-/* モーダル内の実績数入力欄 */
-.collected-count-input {
-    width: 5rem; /* 幅を固定 */
-    padding: 0.25rem 0.5rem; /* py-1 px-2 */
-    border: 1px solid #d1d5db; /* border-gray-300 */
-    border-radius: 0.375rem; /* rounded-md */
-    text-align: right;
-    /* スピナー表示 (ブラウザ依存) */
-    -moz-appearance: textfield; /* Firefox */
-}
-.collected-count-input::-webkit-outer-spin-button,
-.collected-count-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-/* ウェイト表示用 */
-.weight-output {
-    display: inline-block;
-    min-width: 4rem; /* 最小幅 */
-    text-align: right;
-}
+#resultsArea table .text-right { text-align: right; }
+#resultsArea table .font-bold { font-weight: 700; }
+#resultsArea table .bg-gray-50 { background-color: #f9fafb; }
 
 
 /* ボタンの微調整 */
-.submit-button, .download-button, .weight-button {
+.submit-button, .download-button {
     transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 .submit-button:hover:not(:disabled),
-.download-button:hover:not(:disabled),
-.weight-button:hover:not(:disabled) {
+.download-button:hover:not(:disabled) {
+    /* Tailwindの hover:bg-***-700 で処理 */
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
-/* 時間選択ドロップダウン */
-#timeSelectorContainer {
-    /* スタイル調整 */
-}
+/* 必要なら他のスタイルを追加 */
+
+
