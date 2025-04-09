@@ -1,4 +1,4 @@
-/* weightback.css */
+/* style.css (for Weightback Tool) */
 body {
     font-family: 'Inter', 'Noto Sans JP', sans-serif;
 }
@@ -53,6 +53,12 @@ body {
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
+/* 時間選択ドロップダウン (任意) */
+#timeSelectorContainer {
+    /* 必要に応じてスタイル調整 */
+}
+
 /* 必要なら他のスタイルを追加 */
+
 
 
