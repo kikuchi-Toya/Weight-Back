@@ -1,9 +1,9 @@
-/* script.js (v6 - Weighting Feature Added) */
-console.log("script.js: スクリプト開始");
+/* weightback.js - Weight Back Aggregation Tool */
+console.log("weightback.js: スクリプト開始");
 
 // --- 設定値オブジェクト ---
 const config = {
-    ESTAT_APP_ID: "767c024416535e276a90d2d9469eeb5acf7e552f",
+    ESTAT_APP_ID: "767c024416535e276a90d2d9469eeb5acf7e552f", // ★ ご自身のIDに要変更 ★
     STATS_DATA_ID: "0003443840",
     CACHE_KEY: `eStatDataCache_0003443840`,
     CACHE_DURATION_MS: 24 * 60 * 60 * 1000, // 1日
@@ -16,65 +16,49 @@ const config = {
     UNIT_MULTIPLIER: 1000,
     ageCodeMap: { '01004': '15-19', '01005': '20-24', '01006': '25-29', '01007': '30-34', '01008': '35-39', '01009': '40-44', '01010': '45-49', '01011': '50-54', '01012': '55-59', '01013': '60-64', '01014': '65-69' },
     genderCodeMap: { '001': 'male', '002': 'female' },
-    // ★ パネルデータをハードコード ★
-    panels5: { '15-19': { male: 451, female: 1362 }, '20-24': { male: 833, female: 1939 }, '25-29': { male: 1584, female: 3261 }, '30-34': { male: 2604, female: 4152 }, '35-39': { male: 4197, female: 5018 }, '40-44': { male: 6549, female: 6245 }, '45-49': { male: 9747, female: 7021 }, '50-54': { male: 12569, female: 7875 }, '55-59': { male: 11741, female: 5790 }, '60-64': { male: 9778, female: 3903 }, '65-69': { male: 7119, female: 2353 } },
-    warningThreshold: 0.7
+    // warningThreshold はこのツールでは直接使用しない
 };
-config.panels10 = { '15-19': config.panels5['15-19'] || { male: 0, female: 0 }, '20-29': { male: (config.panels5['20-24']?.male || 0) + (config.panels5['25-29']?.male || 0), female: (config.panels5['20-24']?.female || 0) + (config.panels5['25-29']?.female || 0) }, '30-39': { male: (config.panels5['30-34']?.male || 0) + (config.panels5['35-39']?.male || 0), female: (config.panels5['30-34']?.female || 0) + (config.panels5['35-39']?.female || 0) }, '40-49': { male: (config.panels5['40-44']?.male || 0) + (config.panels5['45-49']?.male || 0), female: (config.panels5['40-44']?.female || 0) + (config.panels5['45-49']?.female || 0) }, '50-59': { male: (config.panels5['50-54']?.male || 0) + (config.panels5['55-59']?.male || 0), female: (config.panels5['50-54']?.female || 0) + (config.panels5['55-59']?.female || 0) }, '60-69': { male: (config.panels5['60-64']?.male || 0) + (config.panels5['65-69']?.male || 0), female: (config.panels5['60-64']?.female || 0) + (config.panels5['65-69']?.female || 0) } };
-console.log("Using hardcoded panels5:", config.panels5); console.log("Calculated panels10:", config.panels10);
-const ageGroups5 = Object.values(config.ageCodeMap); // config参照に変更
+const ageGroups5 = Object.values(config.ageCodeMap);
 
 // --- グローバル変数 ---
 let rawApiDataCache = null;
 let availableTimeCodes = [];
 let selectedTimeCode = "";
-let calculatedRatios5 = null;
-let calculatedRatios10 = null;
+let calculatedRatios5 = null; // 5歳刻みの構成比のみ使用
 let isDataReady = false;
 let previouslyFocusedElement;
-let currentSimulationResults = null; // シミュレーション結果を保持
 
 // DOM要素
-let checkerForm, resultModal, modalContent, errorMessage, step2Element, submitButton, loadingSpinner, buttonText;
-let targetSampleInput, genderFilterSelect, ageMinInput, ageMaxInput, ageModeSelect, responseRateInput;
-let targetSampleError, ageMinError, ageMaxError, ageRangeError, responseRateError;
-let timeSelectorElement, timeSelectorContainer;
-let calculateWeightsButtonElement; // ウェイト計算ボタン用
+let sampleInputForm, sampleInputTableBody, timeSelectorElement, timeSelectorContainer;
+let calculateButton, loadingSpinner, buttonText, resultsSection, resultsArea, errorMessage;
+let totalMaleElement, totalFemaleElement, grandTotalElement;
+let downloadResultsCsvButton; // 結果CSVダウンロードボタン用
 
 // --- キャッシュ処理 ---
-function getCachedData() {
+function getCachedData() { /* (変更なし、前回のコードと同じ) */
     const cached = localStorage.getItem(config.CACHE_KEY); if (!cached) { console.log("getCachedData: キャッシュなし"); return null; } try { const parsed = JSON.parse(cached); const now = Date.now(); if (now - parsed.timestamp < config.CACHE_DURATION_MS) { console.log("getCachedData: 有効なキャッシュあり"); return parsed.data; } else { console.log("getCachedData: キャッシュ期限切れ"); localStorage.removeItem(config.CACHE_KEY); return null; } } catch (e) { console.error("getCachedData: キャッシュの解析に失敗", e); localStorage.removeItem(config.CACHE_KEY); return null; }
 }
-function saveDataToCache(dataToCache) {
+function saveDataToCache(dataToCache) { /* (変更なし、前回のコードと同じ) */
     try { const cacheData = { timestamp: Date.now(), data: dataToCache }; localStorage.setItem(config.CACHE_KEY, JSON.stringify(cacheData)); console.log("saveDataToCache: データをキャッシュに保存しました"); } catch (e) { console.error("saveDataToCache: キャッシュの保存に失敗", e); }
 }
 
 // --- APIデータ取得・処理 ---
-async function fetchDataFromApi() {
-    console.log("fetchDataFromApi: 開始");
-    if (config.ESTAT_APP_ID === "YOUR_APP_ID_HERE" || !config.ESTAT_APP_ID) { throw new Error("APIキー (appId) が config オブジェクトに設定されていません。"); }
-    const apiUrl = `https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData?appId=${config.ESTAT_APP_ID}&lang=J&statsDataId=${config.STATS_DATA_ID}&metaGetFlg=Y&cntGetFlg=N&explanationGetFlg=Y&annotationGetFlg=Y&sectionHeaderFlg=1&replaceSpChars=0`;
-    console.log("fetchDataFromApi: Fetching URL:", apiUrl);
-    const response = await fetch(apiUrl);
-    if (!response.ok) { throw new Error(`API通信エラー: ${response.status} ${response.statusText}`); }
-    const data = await response.json();
-    console.log("fetchDataFromApi: APIデータ取得成功");
-    return data;
+async function fetchDataFromApi() { /* (変更なし、前回のコードと同じ) */
+    console.log("fetchDataFromApi: 開始"); if (config.ESTAT_APP_ID === "YOUR_APP_ID_HERE" || !config.ESTAT_APP_ID) { throw new Error("APIキー (appId) が config オブジェクトに設定されていません。"); } const apiUrl = `https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData?appId=${config.ESTAT_APP_ID}&lang=J&statsDataId=${config.STATS_DATA_ID}&metaGetFlg=Y&cntGetFlg=N&explanationGetFlg=Y&annotationGetFlg=Y&sectionHeaderFlg=1&replaceSpChars=0`; console.log("fetchDataFromApi: Fetching URL:", apiUrl); const response = await fetch(apiUrl); if (!response.ok) { throw new Error(`API通信エラー: ${response.status} ${response.statusText}`); } const data = await response.json(); console.log("fetchDataFromApi: APIデータ取得成功"); return data;
 }
-
-function processRawApiData(apiResponseData) {
+function processRawApiData(apiResponseData) { /* (変更なし、前回のコードと同じ) */
     console.log("processRawApiData: 開始"); const valueDataAll = apiResponseData?.GET_STATS_DATA?.STATISTICAL_DATA?.DATA_INF?.VALUE; if (!valueDataAll || !Array.isArray(valueDataAll)) { throw new Error("APIレスポンス形式不正: 人口データ(VALUE)が見つかりません。"); } console.log("processRawApiData: valueDataAll 件数:", valueDataAll.length); let timeCodes = []; try { console.log("processRawApiData: 時点コード抽出開始"); const timeCodeSet = new Set(); valueDataAll.forEach(item => { if (item && typeof item === 'object' && config.TIME_KEY in item) { if (item[config.TIME_KEY]) { timeCodeSet.add(item[config.TIME_KEY]); } else { console.warn("processRawApiData: 空の @time コード:", item); } } else { console.warn("processRawApiData: 不正なデータ項目:", item); } }); timeCodes = [...timeCodeSet].sort().reverse(); console.log("processRawApiData: 利用可能な時点コード:", timeCodes); if (timeCodes.length === 0) { console.warn("processRawApiData: 利用可能な時点コードが見つかりませんでした。"); } } catch (e) { console.error("processRawApiData: 時点コードの抽出エラー", e); throw new Error("APIデータから時点コードの抽出に失敗しました。"); } return { valueDataAll, timeCodes };
 }
-
-function populateTimeSelector(timeCodes) {
+function populateTimeSelector(timeCodes) { /* (変更なし、前回のコードと同じ) */
     console.log("populateTimeSelector: 開始", timeCodes); if (!timeSelectorElement) { console.error("populateTimeSelector: timeSelectorElement が見つかりません。"); return; } timeSelectorElement.innerHTML = ''; if (!timeCodes || timeCodes.length === 0) { console.warn("populateTimeSelector: timeCodes が空です。"); timeSelectorElement.disabled = true; const option = document.createElement('option'); option.value = ""; option.textContent = "データなし"; timeSelectorElement.appendChild(option); if (timeSelectorContainer) timeSelectorContainer.style.display = 'block'; return; } console.log("populateTimeSelector: オプション生成開始"); timeCodes.forEach((code, index) => { const option = document.createElement('option'); option.value = code; try { const year = code.substring(0, 4); const month = code.substring(6, 8); option.textContent = `${year}年${parseInt(month, 10)}月`; console.log(`populateTimeSelector: オプション追加: ${option.textContent} (value=${code})`); } catch(e) { console.error("populateTimeSelector: 日付解析エラー", code, e); option.textContent = code; } timeSelectorElement.appendChild(option); if (index === 0) { option.selected = true; selectedTimeCode = code; console.log("populateTimeSelector: デフォルト選択:", selectedTimeCode); } }); timeSelectorElement.disabled = false; console.log("populateTimeSelector: timeSelectorElement.disabled を false に設定"); if (timeSelectorContainer) timeSelectorContainer.style.display = 'block'; console.log("populateTimeSelector: 完了");
 }
 
 function calculateRatiosForTime(timeCode) {
     console.log(`calculateRatiosForTime: 開始 (${timeCode})`);
-    isDataReady = false;
-    calculatedRatios5 = null;
-    calculatedRatios10 = null;
+    isDataReady = false; // Reset flag
+    calculatedRatios5 = null; // Reset calculated data
+    calculatedRatios10 = null; // Reset calculated data
+
     if (!rawApiDataCache) { console.error("calculateRatiosForTime: APIデータキャッシュがありません"); displayInitializationError("内部エラー: キャッシュデータが見つかりません。"); disableForm("データエラー"); return; }
 
     try {
@@ -99,22 +83,25 @@ function calculateRatiosForTime(timeCode) {
         });
         console.log(`calculateRatiosForTime (${timeCode}): 集計後人口データ:`, population);
         console.log(`calculateRatiosForTime (${timeCode}): 集計後総人口:`, totalPopulation);
-        if (totalPopulation <= 0) { throw new Error(`データ処理エラー: 集計後の総人口(${timeCode})が0以下です。フィルタリング条件やAPIデータを確認してください。`); }
+        if (totalPopulation <= 0) { throw new Error(`データ処理エラー: 集計後の総人口(${timeCode})が0以下です。`); }
 
+        // ★ 5歳刻みの構成比のみ計算・保持 ★
         calculatedRatios5 = {};
-        for (const range in config.ageCodeMap) { const ageRangeKey = config.ageCodeMap[range]; if (!calculatedRatios5[ageRangeKey]) calculatedRatios5[ageRangeKey] = { male: 0, female: 0 }; if (population[ageRangeKey]) calculatedRatios5[ageRangeKey] = { male: (population[ageRangeKey].male || 0) / totalPopulation, female: (population[ageRangeKey].female || 0) / totalPopulation }; }
+        for (const range in config.ageCodeMap) {
+             const ageRangeKey = config.ageCodeMap[range];
+             if (!calculatedRatios5[ageRangeKey]) calculatedRatios5[ageRangeKey] = { male: 0, female: 0 };
+             if (population[ageRangeKey]) calculatedRatios5[ageRangeKey] = { male: (population[ageRangeKey].male || 0) / totalPopulation, female: (population[ageRangeKey].female || 0) / totalPopulation };
+        }
         console.log(`calculateRatiosForTime (${timeCode}): 計算後構成比 (5歳刻み):`, calculatedRatios5);
-
-        calculatedRatios10 = { '15-19': calculatedRatios5['15-19'] || { male: 0, female: 0 }, '20-29': { male: 0, female: 0 }, '30-39': { male: 0, female: 0 }, '40-49': { male: 0, female: 0 }, '50-59': { male: 0, female: 0 }, '60-69': { male: 0, female: 0 } };
-        for (const range5 in calculatedRatios5) { const [minAge] = range5.split('-').map(Number); const ratio = calculatedRatios5[range5]; if (minAge >= 20 && minAge <= 29) { calculatedRatios10['20-29'].male += ratio.male; calculatedRatios10['20-29'].female += ratio.female; } else if (minAge >= 30 && minAge <= 39) { calculatedRatios10['30-39'].male += ratio.male; calculatedRatios10['30-39'].female += ratio.female; } else if (minAge >= 40 && minAge <= 49) { calculatedRatios10['40-49'].male += ratio.male; calculatedRatios10['40-49'].female += ratio.female; } else if (minAge >= 50 && minAge <= 59) { calculatedRatios10['50-59'].male += ratio.male; calculatedRatios10['50-59'].female += ratio.female; } else if (minAge >= 60 && minAge <= 69) { calculatedRatios10['60-69'].male += ratio.male; calculatedRatios10['60-69'].female += ratio.female; } }
-        console.log(`calculateRatiosForTime (${timeCode}): 計算後構成比 (10歳刻み):`, calculatedRatios10);
+        // calculatedRatios10 は不要
 
         isDataReady = true;
-        enableForm();
+        enableForm(); // 構成比計算が成功したらフォーム有効化
         console.log(`calculateRatiosForTime (${timeCode}): データ処理完了`);
+
     } catch (error) {
         console.error(`calculateRatiosForTime (${timeCode}): エラー発生:`, error);
-        displayInitializationError(`人口データの処理に失敗しました (${timeCode}): ${error.message}`);
+        displayInitializationError(`人口構成比の計算に失敗しました (${timeCode}): ${error.message}`);
         isDataReady = false;
         disableForm("データ処理エラー");
     }
@@ -123,167 +110,480 @@ function calculateRatiosForTime(timeCode) {
 // --- UI更新・制御 ---
 function displayInitializationError(message) {
     console.error("Initialization Error:", message);
-    if (errorMessage) {
-        errorMessage.textContent = `初期化エラー: ${message}`;
-        errorMessage.classList.remove('hidden');
-    }
-    disableForm("初期化エラー"); // ボタンテキスト変更
+    if (errorMessage) { errorMessage.textContent = message; errorMessage.classList.remove('hidden'); }
+    disableForm("初期化エラー");
 }
-function disableForm(buttonTextOverride = "データロード中...") {
-    if (submitButton) { submitButton.disabled = true; if (buttonText) buttonText.textContent = buttonTextOverride; submitButton.classList.add('opacity-50', 'cursor-not-allowed'); }
-    [targetSampleInput, genderFilterSelect, ageMinInput, ageMaxInput, ageModeSelect, responseRateInput, timeSelectorElement].forEach(el => { if (el) el.disabled = true; });
+function disableForm(buttonTextOverride = "読込中...") { // ボタンテキスト変更
+    if (calculateButton) { calculateButton.disabled = true; if (buttonText) buttonText.textContent = buttonTextOverride; calculateButton.classList.add('opacity-50', 'cursor-not-allowed'); }
+    if (timeSelectorElement) timeSelectorElement.disabled = true;
+    // Disable all input fields in the table
+    document.querySelectorAll('#sampleInputTableBody input').forEach(input => input.disabled = true);
 }
 function enableForm() {
     if (!isDataReady) { console.warn("enableForm: データ準備未完了"); disableForm("データエラー"); return; }
     console.log("enableForm: フォームを有効化");
-    if (submitButton) { submitButton.disabled = false; if (buttonText) buttonText.textContent = '判定を実行'; submitButton.classList.remove('opacity-50', 'cursor-not-allowed'); }
-    [targetSampleInput, genderFilterSelect, ageMinInput, ageMaxInput, ageModeSelect, responseRateInput, timeSelectorElement].forEach(el => { if (el) { el.disabled = false; if (el.id === 'timeSelector') { console.log("enableForm: timeSelectorElement の disabled を false に設定"); } } });
+    if (calculateButton) { calculateButton.disabled = false; if (buttonText) buttonText.textContent = 'ウェイトバック集計を実行'; calculateButton.classList.remove('opacity-50', 'cursor-not-allowed'); }
+    if (timeSelectorElement) timeSelectorElement.disabled = false;
+     // Enable all input fields in the table
+    document.querySelectorAll('#sampleInputTableBody input').forEach(input => input.disabled = false);
 }
 
-// --- ヘルパー関数, バリデーション関数, モーダル関連関数 ---
-function displayInputError(errorElement, message, inputElement) { if (!errorElement || !inputElement) return; errorElement.textContent = message; if (message) { inputElement.classList.add('input-error'); inputElement.setAttribute('aria-invalid', 'true'); errorElement.style.display = 'block'; } else { inputElement.classList.remove('input-error'); inputElement.removeAttribute('aria-invalid'); errorElement.style.display = 'none'; } }
-function toggleLoading(isLoading) { if (!submitButton || !loadingSpinner || !buttonText) { console.warn("toggleLoading: Button elements not found"); return; } if (isLoading) { submitButton.disabled = true; loadingSpinner.classList.remove('hidden'); buttonText.textContent = '判定中...'; submitButton.classList.add('opacity-50', 'cursor-not-allowed'); } else { submitButton.disabled = false; loadingSpinner.classList.add('hidden'); buttonText.textContent = '判定を実行'; submitButton.classList.remove('opacity-50', 'cursor-not-allowed'); } }
-function getColorClass(status) { switch (status) { case "十分": return "bg-green-100 text-green-800"; case "注意": return "bg-yellow-100 text-yellow-800"; case "困難": return "bg-red-100 text-red-800"; default: return "bg-gray-100 text-gray-800"; } }
-function validateTargetSample() { if (!targetSampleInput) return false; const value = parseInt(targetSampleInput.value, 10); let message = ''; if (isNaN(value) || value <= 0) { message = "回収希望数は1以上の数値を入力してください。"; } displayInputError(targetSampleError, message, targetSampleInput); return !message; }
-function validateAgeMin() { if (!ageMinInput) return false; const value = parseInt(ageMinInput.value, 10); let message = ''; if (isNaN(value) || value < 15 || value > 69) { message = "最小年齢は15〜69の範囲で入力してください。"; } displayInputError(ageMinError, message, ageMinInput); validateAgeRange(); return !message; }
-function validateAgeMax() { if (!ageMaxInput) return false; const value = parseInt(ageMaxInput.value, 10); let message = ''; if (isNaN(value) || value < 15 || value > 69) { message = "最大年齢は15〜69の範囲で入力してください。"; } displayInputError(ageMaxError, message, ageMaxInput); validateAgeRange(); return !message; }
-function validateAgeRange() { if (!ageMinInput || !ageMaxInput) return false; const ageMin = parseInt(ageMinInput.value, 10); const ageMax = parseInt(ageMaxInput.value, 10); let message = ''; if (!isNaN(ageMin) && !isNaN(ageMax) && ageMin > ageMax) { message = "最小年齢は最大年齢以下に設定してください。"; } if (ageRangeError) { ageRangeError.textContent = message; if(message) ageRangeError.style.display = 'block'; else ageRangeError.style.display = 'none'; } return !message; }
-function validateResponseRate() { if (!responseRateInput) return false; const value = parseFloat(responseRateInput.value); let message = ''; if (isNaN(value) || value < 1 || value > 100) { message = "想定回答率は1〜100%の範囲で入力してください。"; } displayInputError(responseRateError, message, responseRateInput); return !message; }
-function validateForm() { console.log("validateForm: 開始"); if (errorMessage) { errorMessage.classList.add("hidden"); errorMessage.textContent = ''; } else { console.error("validateForm: errorMessage element not found!"); } const isSampleValid = validateTargetSample(); const isAgeMinValid = validateAgeMin(); const isAgeMaxValid = validateAgeMax(); const isAgeRangeValid = validateAgeRange(); const isRateValid = validateResponseRate(); const isValid = isSampleValid && isAgeMinValid && isAgeMaxValid && isAgeRangeValid && isRateValid; console.log("validateForm: 結果 =", isValid); return isValid; }
-function handleModalFocus(e) { if (!resultModal || resultModal.classList.contains('hidden')) return; const focusableElements = Array.from( resultModal.querySelectorAll( 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])' ) ).filter(el => el.offsetParent !== null); if (focusableElements.length === 0) return; const firstElement = focusableElements[0]; const lastElement = focusableElements[focusableElements.length - 1]; if (e.key === 'Tab') { if (e.shiftKey) { if (document.activeElement === firstElement) { lastElement.focus(); e.preventDefault(); } } else { if (document.activeElement === lastElement) { firstElement.focus(); e.preventDefault(); } } } }
-function openModal() { console.log("openModal: 開始"); if (!resultModal) { console.error("openModal: resultModal element not found!"); return; } previouslyFocusedElement = document.activeElement; resultModal.classList.remove("hidden"); document.body.classList.add("modal-open"); document.addEventListener('keydown', handleModalFocus); setTimeout(() => { const closeButton = document.getElementById('closeModalButton'); if(closeButton) { closeButton.focus(); } else { console.warn("openModal: Close button not found for focusing"); } }, 100); if (step2Element) { const step2Circle = step2Element.querySelector('.w-6'); const step2Text = step2Element.querySelector('span'); if (step2Circle && step2Text) { step2Circle.classList.remove("bg-gray-200", "text-gray-500"); step2Circle.classList.add("bg-green-600", "text-white"); step2Text.classList.remove("text-gray-400"); step2Text.classList.add("text-green-600"); } }
-    // ★ ウェイト計算ボタンを表示 ★
-    if (calculateWeightsButtonElement) {
-        calculateWeightsButtonElement.classList.remove('hidden');
-    }
+/**
+ * 回収数入力テーブルを生成
+ */
+function createSampleInputTable() {
+    if (!sampleInputTableBody) return;
+    sampleInputTableBody.innerHTML = ''; // Clear placeholder
+
+    ageGroups5.forEach(ageRange => {
+        const row = sampleInputTableBody.insertRow();
+        row.insertCell().textContent = ageRange;
+
+        const cellMale = row.insertCell();
+        const inputMale = document.createElement('input');
+        inputMale.type = 'number';
+        inputMale.id = `sample_${ageRange}_male`;
+        inputMale.min = "0";
+        inputMale.value = "0";
+        inputMale.className = "w-full px-1 py-1 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500";
+        inputMale.addEventListener('input', updateTotalCounts); // 入力時に合計を更新
+        cellMale.appendChild(inputMale);
+
+        const cellFemale = row.insertCell();
+        const inputFemale = document.createElement('input');
+        inputFemale.type = 'number';
+        inputFemale.id = `sample_${ageRange}_female`;
+        inputFemale.min = "0";
+        inputFemale.value = "0";
+        inputFemale.className = "w-full px-1 py-1 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500";
+        inputFemale.addEventListener('input', updateTotalCounts); // 入力時に合計を更新
+        cellFemale.appendChild(inputFemale);
+    });
+    updateTotalCounts(); // 初期合計を計算
 }
-window.closeModal = function() { console.log("closeModal: 開始"); if (!resultModal) return; resultModal.classList.add("hidden"); document.body.classList.remove("modal-open"); document.removeEventListener('keydown', handleModalFocus); if (previouslyFocusedElement) { previouslyFocusedElement.focus(); } }
-window.downloadCSV = function() {
-    console.log("downloadCSV: 開始");
-    if (!modalContent) return;
-    // ★ テーブル特定ロジック変更 ★
-    const requiredTable = modalContent.querySelector('#requiredTable'); // IDで特定
-    const deficitTable = modalContent.querySelector('#deficitTable');   // IDで特定
-    if (!requiredTable) { console.warn("downloadCSV: Required table not found."); return; }
 
-    let csv = "\uFEFF";
-    csv += '"必要数・実績数・ウェイト"\n'; // テーブルタイトル変更
-    // ヘッダー行: 必要数テーブルから取得し、「実績数」「ウェイト」を追加
-    const headers = Array.from(requiredTable.querySelectorAll('thead th'))
-                         .map(th => `"${th.textContent.trim().replace(/"/g, '""')}"`);
-    // 最後の「小計」の前に「実績数」「ウェイト」を挿入
-    headers.splice(headers.length -1, 0, '"実績数"', '"ウェイト"');
-    csv += headers.join(",") + "\r\n";
+/**
+ * 入力された回収数の合計を計算して表示
+ */
+function updateTotalCounts() {
+    let totalMale = 0;
+    let totalFemale = 0;
+    ageGroups5.forEach(ageRange => {
+        const maleInput = document.getElementById(`sample_${ageRange}_male`);
+        const femaleInput = document.getElementById(`sample_${ageRange}_female`);
+        totalMale += parseInt(maleInput?.value || 0, 10);
+        totalFemale += parseInt(femaleInput?.value || 0, 10);
+    });
+    if (totalMaleElement) totalMaleElement.textContent = totalMale;
+    if (totalFemaleElement) totalFemaleElement.textContent = totalFemale;
+    if (grandTotalElement) grandTotalElement.textContent = totalMale + totalFemale;
+}
 
-    // データ行: 必要数テーブルの行をループ
-    const rows = Array.from(requiredTable.querySelectorAll('tbody tr'));
-    rows.forEach(tr => {
-        if (tr.classList.contains('total-row')) return; // 合計行はスキップ
-
-        const cells = Array.from(tr.querySelectorAll('td'));
-        const rowData = [];
-        cells.forEach((cell, index) => {
-             rowData.push(`"${cell.textContent.trim().replace(/"/g, '""')}"`); // 年齢帯、男女別必要数、小計
-
-             // 男女別必要数の後 (index 1 と 2 の後、または性別が片方なら index 1 の後) に実績数とウェイトを追加
-             if (index > 0 && index < headers.length - 3) { // 年齢帯の後、小計の前のセル
-                 const collectedInput = cell.querySelector('.collected-count-input');
-                 const weightOutput = cell.querySelector('.weight-output');
-                 rowData.push(`"${collectedInput ? collectedInput.value : ''}"`); // 実績数
-                 rowData.push(`"${weightOutput ? weightOutput.textContent.trim() : ''}"`); // ウェイト
-             }
+/**
+ * フォームから実際の回収数を取得
+ * @returns {object|null} 回収数データオブジェクト、またはエラー時 null
+ */
+function getActualSampleCounts() {
+    const actualCounts = {};
+    let grandTotal = 0;
+    let isValid = true;
+    ageGroups5.forEach(ageRange => {
+        actualCounts[ageRange] = {};
+        ['male', 'female'].forEach(gender => {
+            const inputElement = document.getElementById(`sample_${ageRange}_${gender}`);
+            const value = parseInt(inputElement?.value || 0, 10);
+            if (isNaN(value) || value < 0) {
+                console.error(`Invalid input for ${ageRange} ${gender}: ${inputElement?.value}`);
+                 if(errorMessage) {
+                     errorMessage.textContent = `入力エラー: ${ageRange} ${gender === 'male' ? '男性':'女性'} の値が不正です。0以上の数値を入力してください。`;
+                     errorMessage.classList.remove('hidden');
+                 }
+                 isValid = false;
+            }
+            actualCounts[ageRange][gender] = value;
+            grandTotal += value;
         });
-        csv += rowData.join(",") + "\r\n";
     });
 
-     // 合計行の処理 (必要に応じて) - 現在は実績数やウェイトの合計は含めない
+    if (!isValid) return null;
 
-    // 不足数テーブル
-    if (deficitTable) {
-        csv += '\r\n"不足数テーブル"\n';
-        const headersDeficit = Array.from(deficitTable.querySelectorAll('thead th'))
-                               .map(th => `"${th.textContent.trim().replace(/"/g, '""')}"`)
-                               .join(",");
-        csv += headersDeficit + "\r\n";
-        const rowsDeficit = Array.from(deficitTable.querySelectorAll('tbody tr'));
-        rowsDeficit.forEach(tr => {
-            const cells = Array.from(tr.querySelectorAll('td'));
-            const row = cells.map(cell => `"${cell.textContent.trim().replace(/"/g, '""')}"`).join(",");
-            csv += row + "\r\n";
+     if (grandTotal <= 0) {
+         if(errorMessage) {
+             errorMessage.textContent = "入力エラー: 回収数の合計が0です。数値を入力してください。";
+             errorMessage.classList.remove('hidden');
+         }
+         return null;
+     }
+     if(errorMessage) errorMessage.classList.add('hidden'); // エラーなければ隠す
+    return { counts: actualCounts, total: grandTotal };
+}
+
+// --- ウェイトバック計算 ---
+/**
+ * ウェイトバック集計を実行
+ * @param {object} actualSampleData - getActualSampleCountsの戻り値 { counts: object, total: number }
+ * @param {object} targetRatios - calculateRatiosForTimeの戻り値 (calculatedRatios5)
+ * @returns {object} 計算結果 { weights: object, weightedCounts: object, totalWeighted: number }
+ */
+function calculateWeightback(actualSampleData, targetRatios) {
+    console.log("calculateWeightback: 開始", actualSampleData, targetRatios);
+    const actualCounts = actualSampleData.counts;
+    const actualTotal = actualSampleData.total;
+    const weights = {};
+    const weightedCounts = {};
+    let totalWeighted = 0;
+
+    if (!targetRatios || actualTotal <= 0) {
+        throw new Error("ウェイトバック計算に必要なデータが不足しています。");
+    }
+
+    ageGroups5.forEach(ageRange => {
+        weights[ageRange] = {};
+        weightedCounts[ageRange] = {};
+        ['male', 'female'].forEach(gender => {
+            const targetRatio = targetRatios[ageRange]?.[gender] || 0;
+            const actualCount = actualCounts[ageRange]?.[gender] || 0;
+            const actualRatio = actualTotal > 0 ? actualCount / actualTotal : 0;
+
+            let weight = 0;
+            if (actualRatio > 0 && targetRatio > 0) {
+                // 基本ウェイト = 目標構成比 / 実績構成比
+                weight = targetRatio / actualRatio;
+            } else if (targetRatio > 0 && actualCount === 0) {
+                // 目標はあるが実績がない場合 -> ウェイト定義不能（または大きな値やエラー）
+                console.warn(`ウェイト計算不能: ${ageRange} ${gender} - 目標構成比 ${targetRatio.toFixed(4)} に対して実績回収数が0です。`);
+                weight = 0; // または他の処理 (例: このセルを除外)
+            } else {
+                // 目標構成比が0の場合など
+                weight = 0;
+            }
+
+            weights[ageRange][gender] = weight;
+            const weightedCount = actualCount * weight;
+            weightedCounts[ageRange][gender] = weightedCount;
+            totalWeighted += weightedCount;
+        });
+    });
+
+    // 結果の正規化（任意）：ウェイト計が実績計と一致するように調整
+    if (totalWeighted > 0 && actualTotal > 0) {
+        const scalingFactor = actualTotal / totalWeighted;
+        console.log("calculateWeightback: 正規化係数:", scalingFactor);
+        totalWeighted = 0; // 再計算
+        ageGroups5.forEach(ageRange => {
+            ['male', 'female'].forEach(gender => {
+                // weights[ageRange][gender] *= scalingFactor; // ウェイト自体を調整する場合
+                weightedCounts[ageRange][gender] *= scalingFactor; // 集計値のみ調整する場合
+                totalWeighted += weightedCounts[ageRange][gender];
+            });
         });
     }
+
+    console.log("calculateWeightback: 計算後のウェイト:", weights);
+    console.log("calculateWeightback: 計算後のウェイト後回収数:", weightedCounts);
+    console.log("calculateWeightback: ウェイト後合計:", totalWeighted);
+
+    return { weights, weightedCounts, totalWeighted };
+}
+
+/**
+ * ウェイトバック結果をHTMLテーブルで表示
+ * @param {object} results - calculateWeightbackの戻り値
+ * @param {object} actualSampleData - getActualSampleCountsの戻り値
+ * @param {object} targetRatios - calculateRatiosForTimeの戻り値
+ */
+function displayWeightbackResults(results, actualSampleData, targetRatios) {
+    console.log("displayWeightbackResults: 開始");
+    if (!resultsArea) return;
+
+    const { weights, weightedCounts, totalWeighted } = results;
+    const actualCounts = actualSampleData.counts;
+    const actualTotal = actualSampleData.total;
+
+    let html = `
+        <p class="text-sm mb-4">人口構成比（${selectedTimeCode.substring(0,4)}年${parseInt(selectedTimeCode.substring(6,8),10)}月）に合わせてウェイトバック集計した結果です。</p>
+        <div class="overflow-x-auto">
+            <table class="min-w-full border-collapse border border-gray-300 text-sm text-center">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th rowspan="2" class="border px-2 py-1 align-middle">年齢階級</th>
+                        <th colspan="2" class="border px-2 py-1">実績回収数</th>
+                        <th colspan="2" class="border px-2 py-1">目標構成比</th>
+                        <th colspan="2" class="border px-2 py-1">ウェイト値</th>
+                        <th colspan="2" class="border px-2 py-1">ウェイト後回収数</th>
+                    </tr>
+                    <tr>
+                        <th class="border px-1 py-1">男性</th><th class="border px-1 py-1">女性</th>
+                        <th class="border px-1 py-1">男性</th><th class="border px-1 py-1">女性</th>
+                        <th class="border px-1 py-1">男性</th><th class="border px-1 py-1">女性</th>
+                        <th class="border px-1 py-1">男性</th><th class="border px-1 py-1">女性</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    let totalActualMale = 0, totalActualFemale = 0;
+    let totalWeightedMale = 0, totalWeightedFemale = 0;
+
+    ageGroups5.forEach(ageRange => {
+        const actualM = actualCounts[ageRange]?.male || 0;
+        const actualF = actualCounts[ageRange]?.female || 0;
+        const targetRatioM = (targetRatios[ageRange]?.male || 0) * 100;
+        const targetRatioF = (targetRatios[ageRange]?.female || 0) * 100;
+        const weightM = weights[ageRange]?.male || 0;
+        const weightF = weights[ageRange]?.female || 0;
+        const weightedM = weightedCounts[ageRange]?.male || 0;
+        const weightedF = weightedCounts[ageRange]?.female || 0;
+
+        totalActualMale += actualM;
+        totalActualFemale += actualF;
+        totalWeightedMale += weightedM;
+        totalWeightedFemale += weightedF;
+
+        html += `
+            <tr>
+                <td class="border px-2 py-1 font-medium">${ageRange}</td>
+                <td class="border px-2 py-1 text-right">${actualM}</td>
+                <td class="border px-2 py-1 text-right">${actualF}</td>
+                <td class="border px-2 py-1 text-right">${targetRatioM.toFixed(2)}%</td>
+                <td class="border px-2 py-1 text-right">${targetRatioF.toFixed(2)}%</td>
+                <td class="border px-2 py-1 text-right">${weightM.toFixed(3)}</td>
+                <td class="border px-2 py-1 text-right">${weightF.toFixed(3)}</td>
+                <td class="border px-2 py-1 text-right font-semibold">${weightedM.toFixed(1)}</td>
+                <td class="border px-2 py-1 text-right font-semibold">${weightedF.toFixed(1)}</td>
+            </tr>
+        `;
+    });
+
+     html += `
+                </tbody>
+                <tfoot class="bg-gray-50 font-bold">
+                    <tr>
+                        <td class="border px-2 py-1 text-right">実績 合計</td>
+                        <td class="border px-2 py-1 text-right">${totalActualMale}</td>
+                        <td class="border px-2 py-1 text-right">${totalActualFemale}</td>
+                        <td colspan="4"></td> {/* Target Ratio and Weight totals are meaningless */}
+                        <td class="border px-2 py-1 text-right">${totalWeightedMale.toFixed(1)}</td>
+                        <td class="border px-2 py-1 text-right">${totalWeightedFemale.toFixed(1)}</td>
+                    </tr>
+                     <tr>
+                        <td class="border px-2 py-1 text-right">総合計</td>
+                        <td colspan="2" class="border px-2 py-1 text-center">${actualTotal}</td>
+                        <td colspan="4"></td>
+                        <td colspan="2" class="border px-2 py-1 text-center">${totalWeighted.toFixed(1)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+
+    resultsArea.innerHTML = html;
+    if(resultsSection) resultsSection.classList.remove('hidden'); // 結果セクションを表示
+    console.log("displayWeightbackResults: 結果表示完了");
+}
+
+
+// --- イベントハンドラ ---
+/**
+ * 集計実行ボタンのクリックハンドラ
+ */
+function handleCalculateSubmit(event) {
+    event.preventDefault(); // Prevent form submission
+    console.log("handleCalculateSubmit: 開始");
+
+    if (!isDataReady || !calculatedRatios5) {
+        console.warn("handleCalculateSubmit: データ未準備");
+        if(errorMessage) { errorMessage.textContent = "人口構成比データが準備できていません。"; errorMessage.classList.remove('hidden'); }
+        return;
+    }
+
+    const actualSampleData = getActualSampleCounts();
+    if (!actualSampleData) {
+        console.warn("handleCalculateSubmit: 回収数入力エラー");
+        return; // エラーメッセージは getActualSampleCounts 内で表示
+    }
+
+    toggleLoading(true); // 計算中表示
+    if(errorMessage) errorMessage.classList.add('hidden');
+    if(resultsSection) resultsSection.classList.add('hidden'); // 古い結果を隠す
+
+    // 少し待ってUIを更新
+    setTimeout(() => {
+        try {
+            const results = calculateWeightback(actualSampleData, calculatedRatios5);
+            displayWeightbackResults(results, actualSampleData, calculatedRatios5);
+        } catch (error) {
+            console.error("handleCalculateSubmit: 計算または表示エラー:", error);
+            if(errorMessage) { errorMessage.textContent = `集計エラー: ${error.message || '詳細不明'}`; errorMessage.classList.remove('hidden'); }
+        } finally {
+            toggleLoading(false); // 計算完了表示
+        }
+    }, 50);
+}
+
+/**
+ * 結果CSVダウンロード処理 (新規追加)
+ */
+function downloadResultsCSV() {
+    console.log("downloadResultsCSV: 開始");
+    const resultsTable = resultsArea.querySelector('table');
+    if (!resultsTable) {
+        console.warn("downloadResultsCSV: 結果テーブルが見つかりません。");
+        alert("ダウンロードする結果がありません。"); // Use alert for simplicity here
+        return;
+    }
+
+    let csv = "\uFEFF"; // BOM for Excel
+
+    // Header Rows
+    const headerRows = Array.from(resultsTable.querySelectorAll('thead tr'));
+    headerRows.forEach(tr => {
+        const cells = Array.from(tr.querySelectorAll('th'));
+        // Handle colspan and rowspan for header (simplified: just get text)
+        const row = cells.map(cell => `"${(cell.textContent || "").replace(/"/g, '""')}"`).join(",");
+        csv += row + "\r\n";
+    });
+
+
+    // Body Rows
+    const bodyRows = Array.from(resultsTable.querySelectorAll('tbody tr'));
+    bodyRows.forEach(tr => {
+        const cells = Array.from(tr.querySelectorAll('td'));
+        const row = cells.map(cell => `"${(cell.textContent || "").replace(/"/g, '""')}"`).join(",");
+        csv += row + "\r\n";
+    });
+
+     // Footer Rows
+    const footerRows = Array.from(resultsTable.querySelectorAll('tfoot tr'));
+    footerRows.forEach(tr => {
+        const cells = Array.from(tr.querySelectorAll('td'));
+         // Handle colspan for footer (simplified: just get text)
+        const row = cells.map(cell => `"${(cell.textContent || "").replace(/"/g, '""')}"`).join(",");
+        csv += row + "\r\n";
+    });
+
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const now = new Date();
-    const formattedDate = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
-    a.download = `回収可否判定_${formattedDate}.csv`;
+    const selectedOption = timeSelectorElement.options[timeSelectorElement.selectedIndex];
+    const timeText = selectedOption ? selectedOption.textContent.replace(/[^0-9]/g,'') : 'unknown_date'; // YYYYMM
+    a.download = `ウェイトバック集計結果_${timeText}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    console.log("downloadCSV: 完了");
+    console.log("downloadResultsCSV: 完了");
 }
 
-// --- シミュレーション関連関数 (リファクタリング) ---
-function getUserInputs() {
-    if (!validateForm()) { console.log("getUserInputs: バリデーション失敗"); if(errorMessage) { errorMessage.textContent = "入力内容を確認してください。"; errorMessage.classList.remove("hidden"); } return null; }
-    console.log("getUserInputs: バリデーション成功");
-    return {
-        sample: parseInt(targetSampleInput.value, 10),
-        gender: genderFilterSelect.value,
-        ageMin: parseInt(ageMinInput.value, 10),
-        ageMax: parseInt(ageMaxInput.value, 10),
-        ageMode: ageModeSelect.value,
-        responseRate: parseFloat(responseRateInput.value) / 100
-    };
+
+// --- 初期化・イベントリスナー設定 ---
+async function initializePage() {
+    console.log("initializePage: 開始");
+    disableForm("データ準備中...");
+
+    let cachedApiData = getCachedData();
+    let apiDataToProcess;
+
+    if (cachedApiData) {
+        console.log("initializePage: キャッシュデータを使用");
+        apiDataToProcess = cachedApiData;
+    } else {
+        try {
+            const apiResponseData = await fetchDataFromApi();
+            const { valueDataAll } = processRawApiData(apiResponseData);
+            apiDataToProcess = valueDataAll;
+            saveDataToCache(apiDataToProcess);
+            console.log("initializePage: APIからデータを取得・保存");
+        } catch (error) {
+            console.error("initializePage: データ取得フェーズでエラー:", error);
+            displayInitializationError(`初期データ取得エラー: ${error.message}`);
+            return;
+        }
+    }
+
+    rawApiDataCache = apiDataToProcess; // Keep raw data for time changes
+
+    try {
+        const timeCodes = [...new Set(apiDataToProcess.map(item => item[config.TIME_KEY]))].sort().reverse();
+        availableTimeCodes = timeCodes;
+        populateTimeSelector(availableTimeCodes); // ドロップダウン生成
+
+        // 入力テーブル生成
+        createSampleInputTable();
+
+        if (selectedTimeCode) {
+            calculateRatiosForTime(selectedTimeCode); // 初回構成比計算
+        } else if (availableTimeCodes.length > 0) {
+            selectedTimeCode = availableTimeCodes[0];
+            calculateRatiosForTime(selectedTimeCode);
+        } else {
+             console.error("initializePage: 利用可能なデータ時点が見つかりません。");
+             displayInitializationError("エラー: 利用可能なデータ時点が見つかりません。");
+        }
+    } catch(error) {
+         console.error("initializePage: 時間選択、テーブル生成、または初期比率計算でエラー:", error);
+         displayInitializationError(`データ処理エラー: ${error.message}`);
+    }
 }
-function performSimulation(inputs) {
-    console.log("performSimulation: 計算開始", inputs);
-    const { sample, gender, ageMin, ageMax, ageMode, responseRate } = inputs;
-    const gendersToProcess = gender === "両方" ? ["male", "female"] : [gender === "男性" ? "male" : "female"];
-    const correctionFactor = 1.0;
-    const [ratiosData, panelsData] = ageMode === "5"
-        ? [calculatedRatios5, config.panels5] // config参照
-        : [calculatedRatios10, config.panels10]; // config参照
 
-    if (!ratiosData) { throw new Error(`構成比データ (${ageMode === "5" ? '5歳刻み' : '10歳刻み'}) が読み込まれていません。`); }
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOMContentLoaded: イベント発火");
 
-    const targetAgeRanges = Object.keys(ratiosData).filter(range => {
-        const rangeParts = range.split('-'); if (rangeParts.length !== 2) return false;
-        const [minAgeInRange, maxAgeInRange] = rangeParts.map(Number); if (isNaN(minAgeInRange) || isNaN(maxAgeInRange)) return false;
-        return ageMax >= minAgeInRange && ageMin <= maxAgeInRange;
-    }).sort();
-    console.log("performSimulation: 対象年齢範囲:", targetAgeRanges);
+    // DOM要素取得
+    sampleInputForm = document.getElementById("sampleInputForm");
+    sampleInputTableBody = document.getElementById("sampleInputTableBody");
+    timeSelectorElement = document.getElementById("timeSelector");
+    timeSelectorContainer = document.getElementById("timeSelectorContainer");
+    calculateButton = document.getElementById("calculateWeightback");
+    loadingSpinner = document.getElementById("loadingSpinner");
+    buttonText = document.getElementById("buttonText");
+    resultsSection = document.getElementById("resultsSection");
+    resultsArea = document.getElementById("resultsArea");
+    errorMessage = document.getElementById("errorMessage");
+    totalMaleElement = document.getElementById("totalMale");
+    totalFemaleElement = document.getElementById("totalFemale");
+    grandTotalElement = document.getElementById("grandTotal");
+    downloadResultsCsvButton = document.getElementById('downloadResultsCsvButton'); // 結果CSVボタン
 
-    let totalWeight = 0;
-    const cellsData = [];
-    targetAgeRanges.forEach(range => {
-        gendersToProcess.forEach(g => {
-            if (ratiosData[range]?.[g] !== undefined && panelsData[range]?.[g] !== undefined) {
-                const weight = ratiosData[range][g] * correctionFactor;
-                const validWeight = Math.max(0, weight);
-                const panelAvailable = Math.floor(panelsData[range][g] * responseRate); // config参照
-                cellsData.push({ range, gender: g, weight: validWeight, panel: panelAvailable });
-                totalWeight += validWeight;
-            } else { console.warn(`データ不足 (Ratio or Panel): range=${range}, gender=${g}`); }
+    // 必須要素チェック
+    const essentialElements = [sampleInputForm, sampleInputTableBody, timeSelectorElement, timeSelectorContainer, calculateButton, loadingSpinner, buttonText, resultsSection, resultsArea, errorMessage, totalMaleElement, totalFemaleElement, grandTotalElement, downloadResultsCsvButton];
+    if (essentialElements.some(el => !el)) {
+        console.error("DOMContentLoaded: 必須DOM要素の一部が見つかりません。HTMLを確認してください。");
+        const body = document.querySelector('body');
+        if(body && !document.getElementById('init-error-msg')) {
+            const initError = document.createElement('div'); initError.id = 'init-error-msg'; initError.textContent = "ページの初期化に失敗しました。必須要素が見つかりません。"; initError.style.color = 'red'; initError.style.padding = '10px'; initError.style.border = '1px solid red'; initError.style.margin = '10px'; body.prepend(initError);
+        }
+        return;
+    }
+    console.log("DOMContentLoaded: 全ての必須DOM要素を取得完了");
+
+    // 初期化処理
+    if (timeSelectorContainer) timeSelectorContainer.style.display = 'none'; // Initially hide
+    initializePage(); // データ取得・初期化開始
+
+    // イベントリスナー設定
+    if (sampleInputForm) sampleInputForm.addEventListener("submit", handleCalculateSubmit);
+
+    if (timeSelectorElement) {
+        timeSelectorElement.addEventListener('change', (event) => {
+            const newTimeCode = event.target.value;
+            if (newTimeCode && newTimeCode !== selectedTimeCode) {
+                console.log("Time selector changed:", newTimeCode);
+                selectedTimeCode = newTimeCode;
+                disableForm("構成比 再計算中..."); // ボタンを無効化＆テキスト変更
+                if(resultsSection) resultsSection.classList.add('hidden'); // 古い結果を隠す
+                if(errorMessage) errorMessage.classList.add('hidden'); // 古いエラーを隠す
+
+                setTimeout(() => {
+                    calculateRatiosForTime(selectedTimeCode); // 再計算実行 (完了後に enableForm が呼ばれる)
+                }, 50);
+            }
         });
-    });
-    console.log("performSimulation: 総ウェイト:", totalWeight); console.log("performSimulation: 初期セルデータ:", cellsData);
-    if (cellsData.length === 0) { throw new Error("対象となる年齢・性別のデータが見つかりませんでした。"); }
-    if (totalWeight < 0) { console.warn("performSimulation: totalWeight is negative."); throw new Error("構成比の合計が負の値になりました。"); }
+    }
+    console.log("DOMContentLoaded: 初期化・イベントリスナー設定完了");
+});
 
-    let totalRequiredCalculated = 0;
-    cellsData.forEach(cell => { const rawRequired = (totalWeight > 0) ? (sample * (cell.weight / totalWeight)) : (sample / cellsData.length); cell.floor = Math.floor(rawRequired); cell.remainder = rawRequired - cell.floor; totalRequiredCalculated += cell.floor; });
-    let remainingSamples = sample - totalRequiredCalculated; remainingSamples = Math.max(0, Math.round(remainingSamples * 1e6) / 1e6);
-    cellsData.sort((a, b) => b.remainder - a.remainder);
-    cellsData.forEach(cell => { cell.required = cell.floor + (remainingSamples > 1e-9 ? 1 : 0); if (remainingSamples > 1e-9) { remainingSamples--; } });
-    let finalTotalRequired = cellsData.reduce((sum, cell) => sum + cell.required, 0); let diff = sample - finalTotalRequired;
-    if (diff !== 0 && cellsData.length > 0) { console.warn(`Rounding adjustment: diff = ${diff}`); cellsData.sort((a, b) => a.remainder - b.remainder); for (let i = 0; i < Math.abs(diff); i++) { if (diff > 0) { cellsData[i % cellsData.length].required++; } else if (cellsData[i % cellsData.length].required > 0) { cellsData[i % cellsData.length].required--; } } finalTotalRequired = cellsData.reduce((sum, cell) => sum + cell.required, 0); console.log(`Adjusted total: ${finalTotalRequired}`); }
-    console.log("performSimulation: 必要数計算後セルデータ:", cellsData);
+console.log("weightback.js: スクリプト終端");
 
-    const totalsRequired = {}; const totalsDeficit = {}; gendersToProcess.forEach(g => { totalsRequired[g] = 0; totalsDeficit[g] = 0; }); let grandTotalDeficit = 0; const comments = [];
-    cellsData.forEach(cell => {
-        const req = cell.required; const panel = cell.panel; const deficit = Math.max(req - panel, 0); let statu
