@@ -3,146 +3,92 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>回収可否アシスタント</title>
+    <title>ウェイトバック集計ツール</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="weightback.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
-<body class="bg-gray-50 font-sans">
+<body class="bg-gray-100 font-sans">
 
-    <header class="bg-green-600 text-white py-4 px-4 sm:px-6 shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-center">
-        <div class="text-center">
-            <h1 class="text-3xl font-bold">回収可否アシスタント</h1>
-            <p class="text-sm mt-1">希望配信条件と構成比に基づく可否判定をサポートします</p>
-        </div>
+    <header class="bg-blue-600 text-white py-4 px-4 sm:px-6 shadow-md text-center">
+        <h1 class="text-2xl font-bold">ウェイトバック集計ツール</h1>
+        <p class="text-sm mt-1">回収サンプル数を入力し、人口構成比に合わせて集計します</p>
     </header>
-    <main class="max-w-4xl mx-auto px-4 py-6">
+    <main class="max-w-5xl mx-auto px-4 py-6">
 
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm px-6 py-4 mb-6 flex justify-between items-center text-sm font-medium text-gray-800">
-            <div class="flex items-center space-x-2 text-green-600">
-                <div class="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-xs font-bold">1</div>
-                <span>希望配信条件</span>
-            </div>
-            <div class="flex-1 h-px bg-gray-300 mx-2"></div>
-            <div class="flex items-center space-x-2 text-gray-400" id="step2">
-                <div class="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs font-bold">2</div>
-                <span>判定・確認</span>
-            </div>
-        </div>
-        <section class="bg-white shadow-lg rounded-lg border border-gray-200 px-6 py-8 mb-6">
-            <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 border-b pb-2 gap-2">
-                 <h2 class="text-xl font-semibold shrink-0">希望配信条件</h2>
-                 <div id="timeSelectorContainer" class="text-sm text-right">
-                     <label for="timeSelector" class="mr-1 sm:mr-2 font-medium">データ参照年月:</label>
-                     <select id="timeSelector" disabled class="px-3 py-1 border border-gray-300 rounded-md shadow-sm bg-gray-100 focus:ring-2 focus:ring-green-300 focus:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed">
+        <section class="bg-white shadow-lg rounded-lg border border-gray-200 px-6 py-6 mb-6">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                 <h2 class="text-xl font-semibold shrink-0">設定</h2>
+                 <div id="timeSelectorContainer" class="text-sm text-right w-full sm:w-auto">
+                     <label for="timeSelector" class="mr-1 sm:mr-2 font-medium">人口構成比データ参照年月:</label>
+                     <select id="timeSelector" disabled class="px-3 py-1 border border-gray-300 rounded-md shadow-sm bg-gray-100 focus:ring-2 focus:ring-blue-300 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
                          <option value="">読込中...</option>
                      </select>
                  </div>
             </div>
-
-            <form id="checkerForm" class="space-y-6" novalidate>
-                <div>
-                    <label for="target_sample" class="block text-sm font-medium mb-1 required">回収希望数</label>
-                    <input type="number" id="target_sample" placeholder="例: 1000" required min="1"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-green-300 focus:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled/>
-                    <span id="target_sample_error" class="error-message"></span>
+             <p class="text-xs text-gray-600">※人口構成比はこの年月時点のe-Statデータ（人口推計）を使用します。</p>
+        </section>
+        <section class="bg-white shadow-lg rounded-lg border border-gray-200 px-6 py-8 mb-6">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">回収サンプル数 入力</h2>
+            <p class="text-sm text-gray-600 mb-4">各年齢階級・性別の回収数を入力してください。</p>
+            <form id="sampleInputForm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full border-collapse border border-gray-300 text-sm text-center">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="border px-3 py-2">年齢階級</th>
+                                <th class="border px-3 py-2">男性 回収数</th>
+                                <th class="border px-3 py-2">女性 回収数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sampleInputTableBody">
+                            <tr><td colspan="3" class="p-4 text-gray-500">人口構成比データを読込中...</td></tr>
+                        </tbody>
+                         <tfoot class="bg-gray-50 font-semibold">
+                            <tr>
+                                <td class="border px-3 py-2 text-right">合計</td>
+                                <td id="totalMale" class="border px-3 py-2">0</td>
+                                <td id="totalFemale" class="border px-3 py-2">0</td>
+                            </tr>
+                             <tr>
+                                <td class="border px-3 py-2 text-right font-bold">総合計</td>
+                                <td id="grandTotal" colspan="2" class="border px-3 py-2 font-bold text-center">0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
-
-                <div>
-                    <label for="gender_filter" class="block text-sm font-medium mb-1 required">対象性別</label>
-                    <select id="gender_filter" required class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-2 focus:ring-green-300 focus:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <option value="両方">男性＆女性</option>
-                        <option value="男性">男性</option>
-                        <option value="女性">女性</option>
-                    </select>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="age_min" class="block text-sm font-medium mb-1 required">最小年齢</label>
-                        <input type="number" id="age_min" placeholder="例: 20" required min="15" max="69"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-green-300 focus:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled/>
-                         <span id="age_min_error" class="error-message"></span>
-                    </div>
-                    <div>
-                        <label for="age_max" class="block text-sm font-medium mb-1 required">最大年齢</label>
-                        <input type="number" id="age_max" placeholder="例: 49" required min="15" max="69"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-green-300 focus:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled/>
-                        <span id="age_max_error" class="error-message"></span>
-                    </div>
-                </div>
-                 <span id="age_range_error" class="error-message"></span>
-
-                <div>
-                    <label for="age_mode" class="block text-sm font-medium mb-1 required">年齢区分</label>
-                    <select id="age_mode" required class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-2 focus:ring-green-300 focus:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <option value="5">5歳刻み</option>
-                        <option value="10">10歳刻み（年代）</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label for="response_rate" class="block text-sm font-medium mb-1 required">想定回答率（％）</label>
-                    <input type="number" id="response_rate" placeholder="例: 70" value="70" min="1" max="100" required
-                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-green-300 focus:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled/>
-                    <span id="response_rate_error" class="error-message"></span>
-                </div>
-
-                <button type="submit" id="submitButton"
-                    class="submit-button w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                <button type="submit" id="calculateWeightback"
+                    class="submit-button w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                     <svg id="loadingSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span id="buttonText">データ読込中...</span>
+                    <span id="buttonText">ウェイトバック集計を実行</span>
                 </button>
             </form>
-            </section>
-        <div id="resultModal"
-             class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 hidden p-4"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="modalTitle">
-            <div class="bg-white w-full max-w-5xl mx-auto rounded-lg shadow-xl relative overflow-y-auto max-h-[90vh] border border-gray-300 flex flex-col"> {/* max-w-4xl から 5xl に変更 */}
-                 {/* */}
-                <div class="flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-lg sticky top-0">
-                    <h2 id="modalTitle" class="text-xl font-semibold text-gray-800">判定結果</h2>
-                    <button id="closeModalButton" onclick="closeModal()" aria-label="閉じる"
-                        class="text-gray-400 hover:text-gray-600 transition duration-150 ease-in-out">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
+        </section>
+        <section id="resultsSection" class="bg-white shadow-lg rounded-lg border border-gray-200 px-6 py-8 mb-6 hidden">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">ウェイトバック集計 結果</h2>
+            <div id="resultsArea" class="space-y-4">
                 </div>
-                 {/* */}
-                <div id="modalContent" class="text-sm p-6 flex-grow">
-                    {/* JSで内容生成 */}
-                    <p class="text-gray-500 text-center py-4">ここに判定結果が表示されます。</p>
-                </div>
-                 {/* */}
-                <div class="flex justify-between items-center p-4 border-t bg-gray-50 rounded-b-lg sticky bottom-0">
-                     {/* Weight Calculation Button */}
-                     <button id="calculateWeightsButton" onclick="calculateAndDisplayWeights()" class="weight-button bg-purple-600 hover:bg-purple-700 text-white font-medium px-5 py-2 rounded-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 hidden"> {/* Initially hidden */}
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1 -mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2zm0 0V6m0 8v.01M12 16a4 4 0 110-8 4 4 0 010 8z" />
-                       </svg>
-                        ウェイト計算実行
-                    </button>
-                    {/* Download Button */}
-                    <button id="downloadCsvButton" onclick="downloadCSV()" class="download-button bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 rounded-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1 -mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        CSVダウンロード
-                    </button>
-                </div>
-            </div>
-        </div>
+             <div class="mt-6 text-right">
+                 <button id="downloadResultsCsvButton" onclick="downloadResultsCSV()" class="download-button bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1 -mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                       <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                     </svg>
+                     結果CSVダウンロード
+                 </button>
+             </div>
+        </section>
         <div id="errorMessage" role="alert" aria-live="polite"
             class="text-red-800 bg-red-100 border border-red-300 mt-6 px-4 py-3 rounded text-center hidden">
             <span class="text-sm">エラーメッセージがここに表示されます。</span>
         </div>
         </main>
-    <script src="script.js" defer></script>
+    <script src="weightback.js" defer></script>
 </body>
 </html>
+
+
